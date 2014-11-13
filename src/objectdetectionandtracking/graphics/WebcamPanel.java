@@ -1,3 +1,5 @@
+package objectdetectionandtracking.graphics;
+
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.util.LinkedList;

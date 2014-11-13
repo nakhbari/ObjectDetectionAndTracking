@@ -1,9 +1,13 @@
+package objectdetectionandtracking.tracking;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.JFrame;
+
+import objectdetectionandtracking.graphics.SliderPanel;
+import objectdetectionandtracking.graphics.WebcamPanel;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -13,7 +17,7 @@ import org.opencv.highgui.VideoCapture;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgproc.Moments;
 
-public class Main {
+public class Tracking {
 
 	private static final int FRAME_HEIGHT = 720;
 	private static final int FRAME_WIDTH = 1280;

@@ -1,3 +1,5 @@
+package objectdetectionandtracking.graphics;
+
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
