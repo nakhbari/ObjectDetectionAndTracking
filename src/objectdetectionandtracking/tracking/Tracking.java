@@ -1,4 +1,5 @@
 package objectdetectionandtracking.tracking;
+
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.util.ArrayList;
@@ -6,8 +7,8 @@ import java.util.List;
 
 import javax.swing.JFrame;
 
-import objectdetectionandtracking.graphics.SliderPanel;
-import objectdetectionandtracking.graphics.WebcamPanel;
+import objectdetectionandtracking.graphics.ImageFilteringPanel;
+import objectdetectionandtracking.graphics.VideoDisplayPanel;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -17,14 +18,27 @@ import org.opencv.highgui.VideoCapture;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgproc.Moments;
 
+/**
+ * Accesses the computer's webcam and display the video feed in both RGB and
+ * HSV. Allows the HSV images to be filtered via sliders. After a reasonably
+ * sized object has been detected the centroid of it will be detected and marked
+ * on both videos.
+ * 
+ * @author Nima Akhbari
+ */
 public class Tracking {
 
-	private static final int FRAME_HEIGHT = 720;
-	private static final int FRAME_WIDTH = 1280;
+	// Constants
+	private static final int VIDEO_FRAME_HEIGHT = 720;
+	private static final int VIDEO_FRAME_WIDTH = 1280;
+	private static final int FILTER_FRAME_HEIGHT = 500;
+	private static final int FILTER_FRAME_WIDTH = 250;
+	// Constrains the number of objects able to be detected (including noise)
 	private static final int MAX_NUM_OBJECTS = 4;
+	// Minimum valid object area in pixel x pixel
 	private static final int MIN_OBJECT_AREA = 20 * 20;
-	private static final int MAX_OBJECT_AREA = (int) (FRAME_HEIGHT
-			* FRAME_WIDTH / 1.5);;
+	// Maximum object area is to be a percentage of the frame's area
+	private static final int MAX_OBJECT_AREA = (int) ((VIDEO_FRAME_HEIGHT * VIDEO_FRAME_WIDTH) * 0.67);;
 
 	public static class PositionVector {
 		int x;
@@ -41,25 +55,25 @@ public class Tracking {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
 		// Create the Frame/Window to display video
-		WebcamPanel normalPanel = new WebcamPanel();
+		VideoDisplayPanel normalPanel = new VideoDisplayPanel();
 		JFrame normalFrame = new JFrame("Normal");
 		normalFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		normalFrame.setSize(FRAME_WIDTH, FRAME_HEIGHT);
+		normalFrame.setSize(VIDEO_FRAME_WIDTH, VIDEO_FRAME_HEIGHT);
 		normalFrame.add(normalPanel);
 		normalFrame.setVisible(true);
-		
+
 		// HSV filtered content wil be displayed here
-		WebcamPanel hsvFilteredPanel = new WebcamPanel();
+		VideoDisplayPanel hsvFilteredPanel = new VideoDisplayPanel();
 		JFrame HSVFilteredframe = new JFrame("HSV Filtered");
 		HSVFilteredframe.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		HSVFilteredframe.setSize(FRAME_WIDTH, FRAME_HEIGHT);
+		HSVFilteredframe.setSize(VIDEO_FRAME_WIDTH, VIDEO_FRAME_HEIGHT);
 		HSVFilteredframe.add(hsvFilteredPanel);
 		HSVFilteredframe.setVisible(true);
 
-		// Create frame to manipulate thresholding
-		SliderPanel slider = new SliderPanel();
+		// Create frame to manipulate image level thresholding
+		ImageFilteringPanel slider = new ImageFilteringPanel();
 		JFrame sliderFrame = new JFrame("HSV Thresholds");
-		sliderFrame.setSize(250, 500);
+		sliderFrame.setSize(FILTER_FRAME_WIDTH, FILTER_FRAME_HEIGHT);
 		sliderFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		sliderFrame.add(slider);
 		sliderFrame.setVisible(true);
@@ -68,8 +82,10 @@ public class Tracking {
 		VideoCapture camera = new VideoCapture(0);
 		camera.open(0);
 
+		// Matrix that represents the individual images
 		Mat originalImage = new Mat();
 		Mat hsvImage = new Mat();
+
 		while (true) {
 
 			// Read in the Webcam Frame
@@ -88,7 +104,7 @@ public class Tracking {
 				hsvImage = morphOps(hsvImage);
 
 				// Find object centroid position
-				PositionVector position = trackFilteredObject(hsvImage);
+				PositionVector position = getObjectsCentroid(hsvImage);
 
 				// Draw circle where the centroid is
 				normalPanel.addCircle(position.x, position.y);
@@ -116,8 +132,8 @@ public class Tracking {
 				new Size(8, 8));
 
 		Imgproc.erode(hsv, hsv, erodeElement);
-		Imgproc.dilate(hsv, hsv, dilateElement);
 		Imgproc.erode(hsv, hsv, erodeElement);
+		Imgproc.dilate(hsv, hsv, dilateElement);
 		Imgproc.dilate(hsv, hsv, dilateElement);
 
 		return hsv;
@@ -138,10 +154,10 @@ public class Tracking {
 				.getDataBuffer()).getData();
 		System.arraycopy(b, 0, targetPixels, 0, b.length);
 		return image;
-
 	}
 
-	public static PositionVector trackFilteredObject(Mat hsvImage) {
+	// Find the object and return the position of the centroid
+	public static PositionVector getObjectsCentroid(Mat hsvImage) {
 		// Temp mat
 		Mat image = new Mat();
 		hsvImage.copyTo(image);
@@ -168,12 +184,8 @@ public class Tracking {
 				// array of this format [Next, Previous, First_Child, Parent],
 				// so we only want the next contour
 				for (int index = 0; index >= 0
-						&& hierarchy.get(index,0) != null; index = (int) hierarchy
+						&& hierarchy.get(index, 0) != null; index = (int) hierarchy
 						.get(index, 0)[0]) {
-
-					if (hierarchy.get(index,0) == null) {
-						System.out.print("Index causes null hierarchy");
-					}
 
 					Moments moment = Imgproc.moments(contours.get(index));
 
@@ -208,39 +220,4 @@ public class Tracking {
 
 		return position;
 	}
-	/*
-	 * void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed){
-	 * 
-	 * Mat temp; threshold.copyTo(temp); //these two vectors needed for output
-	 * of findContours vector< vector<Point> > contours; vector<Vec4i>
-	 * hierarchy; //find contours of filtered image using openCV findContours
-	 * function
-	 * findContours(temp,contours,hierarchy,CV_RETR_CCOMP,CV_CHAIN_APPROX_SIMPLE
-	 * ); //use moments method to find our filtered object double refArea = 0;
-	 * bool objectFound = false; if (hierarchy.size() > 0) { int numObjects =
-	 * hierarchy.size(); //if number of objects greater than MAX_NUM_OBJECTS we
-	 * have a noisy filter if(numObjects<MAX_NUM_OBJECTS){ for (int index = 0;
-	 * index >= 0; index = hierarchy[index][0]) {
-	 * 
-	 * Moments moment = moments((cv::Mat)contours[index]); double area =
-	 * moment.m00;
-	 * 
-	 * //if the area is less than 20 px by 20px then it is probably just noise
-	 * //if the area is the same as the 3/2 of the image size, probably just a
-	 * bad filter //we only want the object with the largest area so we safe a
-	 * reference area each //iteration and compare it to the area in the next
-	 * iteration. if(area>MIN_OBJECT_AREA && area<MAX_OBJECT_AREA &&
-	 * area>refArea){ x = moment.m10/area; y = moment.m01/area; objectFound =
-	 * true; refArea = area; }else objectFound = false;
-	 * 
-	 * 
-	 * } //let user know you found an object if(objectFound ==true){
-	 * putText(cameraFeed,"Tracking Object",Point(0,50),2,1,Scalar(0,255,0),2);
-	 * //draw object location on screen drawObject(x,y,cameraFeed);}
-	 * 
-	 * }else
-	 * putText(cameraFeed,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar
-	 * (0,0,255),2); } }
-	 */
-
 }
