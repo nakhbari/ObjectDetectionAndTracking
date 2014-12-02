@@ -1,0 +1,12 @@
+
+*.class
+
+.classpath
+
+.project
+
+*.prefs
+
+*.mp4
+
+*.rtf

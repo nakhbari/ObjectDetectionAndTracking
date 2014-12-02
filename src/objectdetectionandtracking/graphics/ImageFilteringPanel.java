@@ -28,10 +28,17 @@ public class ImageFilteringPanel extends JPanel {
 	private int[] highRange = { 179, 255, 255 };
 	private String[] levelType = { "Hue", "Saturation", "Value" };
 
+	// initial values
+	private int[] lowInit = { 49, 42, 37 };
+	private int[] highInit = { 88, 229, 157 };
+
 	public ImageFilteringPanel() {
 		initialize();
 	}
 
+	/**
+	 * Initializes the panel's slider components
+	 */
 	private void initialize() {
 
 		if (high.length == low.length) {
@@ -46,7 +53,7 @@ public class ImageFilteringPanel extends JPanel {
 				high[i].setMajorTickSpacing(NUM_TICKS_SPACING);
 				high[i].setPaintTicks(true);
 				high[i].setPaintLabels(true);
-				high[i].setValue(high[i].getMaximum());
+				high[i].setValue(highInit[i]);
 				high[i].addChangeListener(new ChangeListener() {
 
 					@Override
@@ -62,7 +69,7 @@ public class ImageFilteringPanel extends JPanel {
 				low[i].setMajorTickSpacing(NUM_TICKS_SPACING);
 				low[i].setPaintLabels(true);
 				low[i].setPaintTicks(true);
-				low[i].setValue(low[i].getMinimum());
+				low[i].setValue(lowInit[i]);
 				low[i].addChangeListener(new ChangeListener() {
 
 					@Override
@@ -82,19 +89,29 @@ public class ImageFilteringPanel extends JPanel {
 		}
 	}
 
-	// Returns values of the High levels
+	/**
+	 * Returns values of the High levels
+	 * 
+	 * @return Scalar of the high levels
+	 */
 	public Scalar getScalarHigh() {
 		return new Scalar(high[0].getValue(), high[1].getValue(),
 				high[2].getValue());
 	}
 
-	// Returns values of the Low levels
+	/**
+	 * Returns values of the Low levels
+	 * 
+	 * @return Scalar of the low levels
+	 */
 	public Scalar getScalarLow() {
 		return new Scalar(low[0].getValue(), low[1].getValue(),
 				low[2].getValue());
 	}
 
-	// Prints all the level values
+	/**
+	 * Prints all the level values
+	 */
 	private void PrintValues() {
 		System.out.println("Hue Range: (" + low[0].getValue() + ","
 				+ high[0].getValue() + ") Saturation Range: ("

@@ -34,23 +34,22 @@ public class Tracking {
 	private static final int FILTER_FRAME_HEIGHT = 500;
 	private static final int FILTER_FRAME_WIDTH = 250;
 	// Constrains the number of objects able to be detected (including noise)
-	private static final int MAX_NUM_OBJECTS = 4;
+	private static final int MAX_NUM_OBJECTS = 20;
 	// Minimum valid object area in pixel x pixel
-	private static final int MIN_OBJECT_AREA = 20 * 20;
+	private static final int MIN_OBJECT_AREA = 30 * 30;
 	// Maximum object area is to be a percentage of the frame's area
 	private static final int MAX_OBJECT_AREA = (int) ((VIDEO_FRAME_HEIGHT * VIDEO_FRAME_WIDTH) * 0.67);;
 
-	public static class PositionVector {
-		int x;
-		int y;
-
-		public PositionVector() {
-			x = 0;
-			y = 0;
-		}
-	}
-
+	/**
+	 * Entry point for the program
+	 * 
+	 * @param args
+	 */
 	public static void main(String[] args) {
+		long lastLoopTime = System.nanoTime();
+		long lastFpsTime = 0;
+		long fps = 0;
+		PositionVector currentPosition = null;
 
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
@@ -88,6 +87,26 @@ public class Tracking {
 
 		while (true) {
 
+			// Determine how long it's been since last update; this will be used
+			// to calculate
+			// how far entities should move this loop
+			long currentTime = System.nanoTime();
+			long updateLengthTime = currentTime - lastLoopTime;
+			lastLoopTime = currentTime;
+
+			// Update frame counter
+			lastFpsTime += updateLengthTime;
+			fps++;
+
+			// Update FPS counter and remaining game time if a second has passed
+			// since last recorded
+			if (lastFpsTime >= 1000000000) {
+				normalPanel.setFrameRate(fps);
+				hsvFilteredPanel.setFrameRate(fps);
+				lastFpsTime = 0;
+				fps = 0;
+			}
+
 			// Read in the Webcam Frame
 			camera.read(originalImage);
 
@@ -101,15 +120,19 @@ public class Tracking {
 						slider.getScalarHigh(), hsvImage);
 
 				// Clarify the image
-				hsvImage = morphOps(hsvImage);
+				hsvImage = reduceNoise(hsvImage);
 
 				// Find object centroid position
-				PositionVector position = getObjectsCentroid(hsvImage);
+				currentPosition = getObjectsCentroid(hsvImage);
 
-				// Draw circle where the centroid is
-				normalPanel.addCircle(position.x, position.y);
-				hsvFilteredPanel.addCircle(position.x, position.y);
-
+				if (currentPosition != null) {
+					// Draw circle where the centroid is
+					normalPanel.addCircle(currentPosition.getX(),
+							currentPosition.getY());
+					hsvFilteredPanel.addCircle(currentPosition.getX(),
+							currentPosition.getY());
+				}
+				
 				// Display image
 				normalPanel.setImageBuffer(toBufferedImage(originalImage));
 				hsvFilteredPanel.setImageBuffer(toBufferedImage(hsvImage));
@@ -120,7 +143,16 @@ public class Tracking {
 		}
 	}
 
-	private static Mat morphOps(Mat hsv) {
+	/**
+	 * Reduces the noise in the image by shrinking the groups of pixels to
+	 * eliminate outliers, and then expand the pixels to restore the shrinked
+	 * pixels.
+	 * 
+	 * @param image
+	 *            - Image to be clarified
+	 * @return Clarified image
+	 */
+	private static Mat reduceNoise(Mat image) {
 
 		// create structuring element that will be used to "dilate" and "erode"
 		// image. the element chosen here is a 3px by 3px rectangle
@@ -129,18 +161,30 @@ public class Tracking {
 
 		// dilate with larger element so make sure object is nicely visible
 		Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT,
-				new Size(8, 8));
+				new Size(6, 6));
 
-		Imgproc.erode(hsv, hsv, erodeElement);
-		Imgproc.erode(hsv, hsv, erodeElement);
-		Imgproc.dilate(hsv, hsv, dilateElement);
-		Imgproc.dilate(hsv, hsv, dilateElement);
+		// Erode will shrink the grouping of pixels
+		Imgproc.erode(image, image, erodeElement);
+		Imgproc.erode(image, image, erodeElement);
+		Imgproc.erode(image, image, erodeElement);
+		Imgproc.erode(image, image, erodeElement);
 
-		return hsv;
+		// // Dilate will expand the grouping of pixels
+		Imgproc.dilate(image, image, dilateElement);
+		Imgproc.dilate(image, image, dilateElement);
+		Imgproc.dilate(image, image, dilateElement);
+
+		return image;
 
 	}
 
-	// Convert matrix into an image
+	/**
+	 * Convert matrix into an image
+	 * 
+	 * @param m
+	 *            - matrix to be converted
+	 * @return Converted BufferedImage
+	 */
 	public static BufferedImage toBufferedImage(Mat m) {
 		int type = BufferedImage.TYPE_BYTE_GRAY;
 		if (m.channels() > 1) {
@@ -156,11 +200,19 @@ public class Tracking {
 		return image;
 	}
 
-	// Find the object and return the position of the centroid
-	public static PositionVector getObjectsCentroid(Mat hsvImage) {
-		// Temp mat
+	/**
+	 * Find the object and return the position of the centroid
+	 * 
+	 * @param inputImage
+	 *            - Image that will be scanned for objects
+	 * @return Position of the centroid
+	 * */
+	public static PositionVector getObjectsCentroid(Mat inputImage) {
+
+		// Temp mat, as to not override the input Mat
 		Mat image = new Mat();
-		hsvImage.copyTo(image);
+		inputImage.copyTo(image);
+
 		PositionVector position = new PositionVector();
 		List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
 		Mat hierarchy = new Mat();
@@ -199,8 +251,8 @@ public class Tracking {
 					// next iteration.
 					if (area > MIN_OBJECT_AREA && area < MAX_OBJECT_AREA
 							&& area > refArea) {
-						position.x = (int) (moment.get_m10() / area);
-						position.y = (int) (moment.get_m01() / area);
+						position.setX((int) (moment.get_m10() / area));
+						position.setY((int) (moment.get_m01() / area));
 						refArea = area;
 						objectFound = true;
 					} else {
@@ -209,15 +261,16 @@ public class Tracking {
 
 				}
 				// let user know you found an object
+
 				if (objectFound) {
 					System.out.println("Object Found at Coordinate ("
-							+ position.x + "," + position.y + ")");
+							+ position.getX() + "," + position.getY() + ")");
 				}
 
 			}
 
 		}
 
-		return position;
+		return (objectFound) ? position : null;
 	}
 }
