@@ -8,7 +8,7 @@ import java.util.Queue;
 
 import javax.swing.JPanel;
 
-import objectdetectionandtracking.tracking.PositionVector;
+import objectdetectionandtracking.util.Vector2;
 
 /**
  * Graphics panel that controls the video feed. Allows for new frames to be
@@ -35,8 +35,8 @@ public class VideoDisplayPanel extends JPanel {
 	private long frameRate;
 	private BufferedImage imageBuffer;
 	private Queue<Circle> circles;
-	private PositionVector positionA;
-	private PositionVector positionB;
+	private Vector2 positionA;
+	private Vector2 positionB;
 
 	public VideoDisplayPanel() {
 		super();
@@ -45,8 +45,7 @@ public class VideoDisplayPanel extends JPanel {
 	}
 
 	/**
-	 * Gets called by repaint(), and adds the components
-	 * to the panel (this)
+	 * Gets called by repaint(), and adds the components to the panel (this)
 	 */
 	public void paint(Graphics graphicsContext) {
 		if (imageBuffer != null) {
@@ -65,15 +64,17 @@ public class VideoDisplayPanel extends JPanel {
 			}
 		}
 		graphicsContext.drawString("FPS: " + frameRate, 20, 20);
-		
-		if(positionA != null && positionB != null){
+
+		if (positionA != null && positionB != null) {
 			graphicsContext.setColor(Color.RED);
-			graphicsContext.drawLine(positionA.getX(), positionA.getY(), positionB.getX(), positionB.getY());
+			graphicsContext.drawLine((int) positionA.x, (int) positionA.y,
+					(int) positionB.x, (int) positionB.y);
 		}
 	}
 
 	/**
 	 * Sets the panel's buffered image
+	 * 
 	 * @param image
 	 */
 	public void setImageBuffer(BufferedImage image) {
@@ -85,8 +86,11 @@ public class VideoDisplayPanel extends JPanel {
 
 	/**
 	 * Adds circle to be drawn onto the buffered image
-	 * @param x - X coordinate in pixels
-	 * @param y - Y coordinate in pixels
+	 * 
+	 * @param x
+	 *            - X coordinate in pixels
+	 * @param y
+	 *            - Y coordinate in pixels
 	 */
 	public void addCircle(int x, int y) {
 
@@ -103,12 +107,12 @@ public class VideoDisplayPanel extends JPanel {
 			circles.remove();
 		}
 	}
-	
-	public void setFrameRate(long rate){
+
+	public void setFrameRate(long rate) {
 		this.frameRate = rate;
 	}
-	
-	public void drawTrajectory(PositionVector positionA, PositionVector positionB){
+
+	public void drawTrajectory(Vector2 positionA, Vector2 positionB) {
 		this.positionA = positionA;
 		this.positionB = positionB;
 	}

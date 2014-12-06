@@ -9,6 +9,7 @@ import javax.swing.JFrame;
 
 import objectdetectionandtracking.graphics.ImageFilteringPanel;
 import objectdetectionandtracking.graphics.VideoDisplayPanel;
+import objectdetectionandtracking.util.Vector2;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -49,7 +50,7 @@ public class Tracking {
 		long lastLoopTime = System.nanoTime();
 		long lastFpsTime = 0;
 		long fps = 0;
-		PositionVector currentPosition = null;
+		Vector2 currentPosition = null;
 
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
@@ -127,12 +128,12 @@ public class Tracking {
 
 				if (currentPosition != null) {
 					// Draw circle where the centroid is
-					normalPanel.addCircle(currentPosition.getX(),
-							currentPosition.getY());
-					hsvFilteredPanel.addCircle(currentPosition.getX(),
-							currentPosition.getY());
+					normalPanel.addCircle((int) currentPosition.y,
+							(int) currentPosition.x);
+					hsvFilteredPanel.addCircle((int) currentPosition.x,
+							(int) currentPosition.y);
 				}
-				
+
 				// Display image
 				normalPanel.setImageBuffer(toBufferedImage(originalImage));
 				hsvFilteredPanel.setImageBuffer(toBufferedImage(hsvImage));
@@ -207,13 +208,13 @@ public class Tracking {
 	 *            - Image that will be scanned for objects
 	 * @return Position of the centroid
 	 * */
-	public static PositionVector getObjectsCentroid(Mat inputImage) {
+	public static Vector2 getObjectsCentroid(Mat inputImage) {
 
 		// Temp mat, as to not override the input Mat
 		Mat image = new Mat();
 		inputImage.copyTo(image);
 
-		PositionVector position = new PositionVector();
+		Vector2 position = new Vector2();
 		List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
 		Mat hierarchy = new Mat();
 
@@ -251,8 +252,8 @@ public class Tracking {
 					// next iteration.
 					if (area > MIN_OBJECT_AREA && area < MAX_OBJECT_AREA
 							&& area > refArea) {
-						position.setX((int) (moment.get_m10() / area));
-						position.setY((int) (moment.get_m01() / area));
+						position.x = (int) (moment.get_m10() / area);
+						position.y = (int) (moment.get_m01() / area);
 						refArea = area;
 						objectFound = true;
 					} else {
@@ -264,7 +265,7 @@ public class Tracking {
 
 				if (objectFound) {
 					System.out.println("Object Found at Coordinate ("
-							+ position.getX() + "," + position.getY() + ")");
+							+ position.x + "," + position.y + ")");
 				}
 
 			}
