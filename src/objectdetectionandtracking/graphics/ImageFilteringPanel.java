@@ -29,8 +29,8 @@ public class ImageFilteringPanel extends JPanel {
 	private String[] levelType = { "Hue", "Saturation", "Value" };
 
 	// initial values
-	private int[] lowInit = { 49, 42, 37 };
-	private int[] highInit = { 88, 229, 157 };
+	private int[] lowInit = { 0, 0, 0 };
+	private int[] highInit = { 179, 255, 255 };
 
 	public ImageFilteringPanel() {
 		initialize();

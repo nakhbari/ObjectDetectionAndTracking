@@ -4,43 +4,32 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 
 import javax.swing.JPanel;
 
-import objectdetectionandtracking.util.Vector2;
+import objectdetectionandtracking.tracking.TrackingObject;
 
 /**
  * Graphics panel that controls the video feed. Allows for new frames to be
- * added and for circles to be superimposed onto the image.
+ * added and for tracked object positions to be superimposed onto the image.
  * 
  * @author Nima Akhbari
  */
 
 public class VideoDisplayPanel extends JPanel {
 
-	private static class Circle {
-		public int x, y, radius;
-
-		public Circle() {
-			x = 0;
-			y = 0;
-			radius = 0;
-		}
-	}
-
 	private static final long serialVersionUID = 1;
-	private static final int MAX_NUM_CIRCLES = 10;
+	private static final int MAX_NUM_OBJECTS = 10;
 	private static final int DEFAULT_RADIUS_SIZE = 10;
 	private long frameRate;
 	private BufferedImage imageBuffer;
-	private Queue<Circle> circles;
-	private Vector2 positionA;
-	private Vector2 positionB;
+	private Queue<TrackingObject> objects;
 
 	public VideoDisplayPanel() {
 		super();
-		circles = new LinkedList<Circle>();
+		objects = new LinkedList<TrackingObject>();
 		frameRate = 0;
 	}
 
@@ -55,21 +44,19 @@ public class VideoDisplayPanel extends JPanel {
 		}
 
 		// Copy the Queue to avoid iterating while changes are being made to it
-		Queue<Circle> circlesCopy = new LinkedList<Circle>(circles);
-		if (!circlesCopy.isEmpty()) {
-			for (Circle c : circlesCopy) {
+		Queue<TrackingObject> objectsCopy = new LinkedList<TrackingObject>(
+				objects);
+		if (!objectsCopy.isEmpty()) {
+			for (TrackingObject obj : objectsCopy) {
 				// For each circle in the queue, draw the circle
-				graphicsContext.setColor(Color.GREEN);
-				graphicsContext.fillOval(c.x, c.y, c.radius, c.radius);
+				graphicsContext.setColor(obj.getColor());
+				graphicsContext.fillOval((int) obj.getX(), (int) obj.getY(),
+						DEFAULT_RADIUS_SIZE, DEFAULT_RADIUS_SIZE);
 			}
 		}
-		graphicsContext.drawString("FPS: " + frameRate, 20, 20);
 
-		if (positionA != null && positionB != null) {
-			graphicsContext.setColor(Color.RED);
-			graphicsContext.drawLine((int) positionA.x, (int) positionA.y,
-					(int) positionB.x, (int) positionB.y);
-		}
+		graphicsContext.setColor(Color.CYAN);
+		graphicsContext.drawString("FPS: " + frameRate, 20, 20);
 	}
 
 	/**
@@ -92,19 +79,26 @@ public class VideoDisplayPanel extends JPanel {
 	 * @param y
 	 *            - Y coordinate in pixels
 	 */
-	public void addCircle(int x, int y) {
+	public void addObject(TrackingObject obj) {
 
-		// Add a new circle to the array
-		Circle circle = new Circle();
-		circle.x = x;
-		circle.y = y;
-		circle.radius = DEFAULT_RADIUS_SIZE;
+		// Add a new object to the array
+		objects.add(obj);
 
-		circles.add(circle);
+		// Remove objects if the maximum has been reached
+		if (objects.size() > MAX_NUM_OBJECTS) {
+			objects.remove();
+		}
+	}
 
-		// Remove circle if the maximum has been reached
-		if (circles.size() > MAX_NUM_CIRCLES) {
-			circles.remove();
+	public void setObjects(List<TrackingObject> objs) {
+		// set a new objects as the array
+		objects.clear();
+
+		if (objs != null) {
+
+			for (TrackingObject obj : objs) {
+				objects.add(obj);
+			}
 		}
 	}
 
@@ -112,8 +106,4 @@ public class VideoDisplayPanel extends JPanel {
 		this.frameRate = rate;
 	}
 
-	public void drawTrajectory(Vector2 positionA, Vector2 positionB) {
-		this.positionA = positionA;
-		this.positionB = positionB;
-	}
 }

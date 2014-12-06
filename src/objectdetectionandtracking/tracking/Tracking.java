@@ -3,7 +3,10 @@ package objectdetectionandtracking.tracking;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 
 import javax.swing.JFrame;
 
@@ -14,6 +17,7 @@ import objectdetectionandtracking.util.Vector2;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.highgui.VideoCapture;
 import org.opencv.imgproc.Imgproc;
@@ -50,8 +54,11 @@ public class Tracking {
 		long lastLoopTime = System.nanoTime();
 		long lastFpsTime = 0;
 		long fps = 0;
-		Vector2 currentPosition = null;
+		boolean calibratingFilter = true;
 
+		List<TrackingObject> objects = new ArrayList<TrackingObject>(); 
+		TrackingObject objectToTrack;
+		
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
 		// Create the Frame/Window to display video
@@ -68,7 +75,6 @@ public class Tracking {
 		HSVFilteredframe.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		HSVFilteredframe.setSize(VIDEO_FRAME_WIDTH, VIDEO_FRAME_HEIGHT);
 		HSVFilteredframe.add(hsvFilteredPanel);
-		HSVFilteredframe.setVisible(true);
 
 		// Create frame to manipulate image level thresholding
 		ImageFilteringPanel slider = new ImageFilteringPanel();
@@ -76,7 +82,11 @@ public class Tracking {
 		sliderFrame.setSize(FILTER_FRAME_WIDTH, FILTER_FRAME_HEIGHT);
 		sliderFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		sliderFrame.add(slider);
-		sliderFrame.setVisible(true);
+
+		if (calibratingFilter) {
+			sliderFrame.setVisible(true);
+			HSVFilteredframe.setVisible(true);
+		}
 
 		// Open connection to webcam
 		VideoCapture camera = new VideoCapture(0);
@@ -85,6 +95,7 @@ public class Tracking {
 		// Matrix that represents the individual images
 		Mat originalImage = new Mat();
 		Mat hsvImage = new Mat();
+		Mat hsvImageThresholded = new Mat();
 
 		while (true) {
 
@@ -116,27 +127,58 @@ public class Tracking {
 				// Convert matrix from RGB to HSV
 				Imgproc.cvtColor(originalImage, hsvImage, Imgproc.COLOR_BGR2HSV);
 
-				// Threshold the hsv image to clarify the picture
-				Core.inRange(hsvImage, slider.getScalarLow(),
-						slider.getScalarHigh(), hsvImage);
+				if (calibratingFilter) {
+					 objectToTrack = new TrackingObject();
+					 
+					// Threshold the hsv image to filter the picture
+					Core.inRange(hsvImage, slider.getScalarLow(),
+							slider.getScalarHigh(), hsvImage);
 
-				// Clarify the image
-				hsvImage = reduceNoise(hsvImage);
+					// reduce the noise in the image
+					reduceNoise(hsvImage);
 
-				// Find object centroid position
-				currentPosition = getObjectsCentroid(hsvImage);
+					// Find list of objects
+					findObjects(hsvImage, objectToTrack, objects);
 
-				if (currentPosition != null) {
 					// Draw circle where the centroid is
-					normalPanel.addCircle((int) currentPosition.y,
-							(int) currentPosition.x);
-					hsvFilteredPanel.addCircle((int) currentPosition.x,
-							(int) currentPosition.y);
+					normalPanel.setObjects(objects);
+					hsvFilteredPanel.setObjects(objects);
+					objects.clear();
+
+					hsvFilteredPanel.setImageBuffer(toBufferedImage(hsvImage));
+
+				} else {
+					 objectToTrack = new Puck();
+					 
+					// Threshold the hsv image to filter for Pucks
+					Core.inRange(hsvImage, objectToTrack.HSVmin,objectToTrack.HSVmax, hsvImageThresholded);
+
+					// reduce the noise in the image
+					reduceNoise(hsvImageThresholded);
+
+					// Find list of Pucks
+					findObjects(hsvImageThresholded, objectToTrack, objects);
+					
+					objectToTrack = new Banana();
+					 
+					// Threshold the hsv image to filter for Pucks
+					Core.inRange(hsvImage, objectToTrack.HSVmin,objectToTrack.HSVmax, hsvImageThresholded);
+
+					// reduce the noise in the image
+					reduceNoise(hsvImageThresholded);
+
+					// Find list of Pucks
+					findObjects(hsvImageThresholded, objectToTrack, objects);
+
+					// Draw circle where the centroid is
+					normalPanel.setObjects(objects);
+					objects.clear();
+
 				}
 
 				// Display image
 				normalPanel.setImageBuffer(toBufferedImage(originalImage));
-				hsvFilteredPanel.setImageBuffer(toBufferedImage(hsvImage));
+
 			} else {
 				System.out.println(" --(!) No captured frame -- Break!");
 				break;
@@ -151,9 +193,8 @@ public class Tracking {
 	 * 
 	 * @param image
 	 *            - Image to be clarified
-	 * @return Clarified image
 	 */
-	private static Mat reduceNoise(Mat image) {
+	private static void reduceNoise(Mat image) {
 
 		// create structuring element that will be used to "dilate" and "erode"
 		// image. the element chosen here is a 3px by 3px rectangle
@@ -174,8 +215,6 @@ public class Tracking {
 		Imgproc.dilate(image, image, dilateElement);
 		Imgproc.dilate(image, image, dilateElement);
 		Imgproc.dilate(image, image, dilateElement);
-
-		return image;
 
 	}
 
@@ -208,13 +247,13 @@ public class Tracking {
 	 *            - Image that will be scanned for objects
 	 * @return Position of the centroid
 	 * */
-	public static Vector2 getObjectsCentroid(Mat inputImage) {
+	public static void findObjects(Mat inputImage,
+			TrackingObject obj, List<TrackingObject> objects) {
 
 		// Temp mat, as to not override the input Mat
 		Mat image = new Mat();
 		inputImage.copyTo(image);
 
-		Vector2 position = new Vector2();
 		List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
 		Mat hierarchy = new Mat();
 
@@ -252,26 +291,23 @@ public class Tracking {
 					// next iteration.
 					if (area > MIN_OBJECT_AREA && area < MAX_OBJECT_AREA
 							&& area > refArea) {
-						position.x = (int) (moment.get_m10() / area);
-						position.y = (int) (moment.get_m01() / area);
+						obj.setX((float) (moment.get_m10() / area));
+						obj.setY((float) (moment.get_m01() / area));
+
+						objects.add(obj);
 						refArea = area;
 						objectFound = true;
+
+						System.out.println("Object Found at Coordinate ("
+								+ obj.getX() + "," + obj.getY() + ")");
 					} else {
 						objectFound = false;
 					}
 
 				}
-				// let user know you found an object
-
-				if (objectFound) {
-					System.out.println("Object Found at Coordinate ("
-							+ position.x + "," + position.y + ")");
-				}
 
 			}
 
 		}
-
-		return (objectFound) ? position : null;
 	}
 }
