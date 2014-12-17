@@ -34,14 +34,14 @@ import org.opencv.imgproc.Moments;
 public class Tracking {
 
 	// Constants
-	private static final int VIDEO_FRAME_HEIGHT = 720;
-	private static final int VIDEO_FRAME_WIDTH = 1280;
+	private static final int VIDEO_FRAME_HEIGHT = 480;
+	private static final int VIDEO_FRAME_WIDTH = 720;
 	private static final int FILTER_FRAME_HEIGHT = 500;
 	private static final int FILTER_FRAME_WIDTH = 250;
 	// Constrains the number of objects able to be detected (including noise)
 	private static final int MAX_NUM_OBJECTS = 20;
 	// Minimum valid object area in pixel x pixel
-	private static final int MIN_OBJECT_AREA = 30 * 30;
+	private static final int MIN_OBJECT_AREA = 10 * 10;
 	// Maximum object area is to be a percentage of the frame's area
 	private static final int MAX_OBJECT_AREA = (int) ((VIDEO_FRAME_HEIGHT * VIDEO_FRAME_WIDTH) * 0.67);;
 
@@ -54,11 +54,12 @@ public class Tracking {
 		long lastLoopTime = System.nanoTime();
 		long lastFpsTime = 0;
 		long fps = 0;
-		boolean calibratingFilter = true;
+		boolean filterCalibration = false;
+		boolean useCameraFeed = true;
 
-		List<TrackingObject> objects = new ArrayList<TrackingObject>(); 
+		List<TrackingObject> objects = new ArrayList<TrackingObject>();
 		TrackingObject objectToTrack;
-		
+
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
 		// Create the Frame/Window to display video
@@ -83,19 +84,25 @@ public class Tracking {
 		sliderFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		sliderFrame.add(slider);
 
-		if (calibratingFilter) {
+		if (filterCalibration) {
 			sliderFrame.setVisible(true);
 			HSVFilteredframe.setVisible(true);
 		}
 
 		// Open connection to webcam
-		VideoCapture camera = new VideoCapture(0);
-		camera.open(0);
+		VideoCapture camera;
+		if (useCameraFeed) {
+			camera = new VideoCapture(0);
+			camera.open(0);
+		} else {
+			camera = new VideoCapture(
+					"/Users/nima/Documents/4TB6 Code/ObjectDetectionAndTracking/Gameplay Video Footage (Yellow Puck) 480p.mp4");
+		}
 
 		// Matrix that represents the individual images
 		Mat originalImage = new Mat();
 		Mat hsvImage = new Mat();
-		Mat hsvImageThresholded = new Mat();
+		int objectcount = 0;
 
 		while (true) {
 
@@ -127,9 +134,9 @@ public class Tracking {
 				// Convert matrix from RGB to HSV
 				Imgproc.cvtColor(originalImage, hsvImage, Imgproc.COLOR_BGR2HSV);
 
-				if (calibratingFilter) {
-					 objectToTrack = new TrackingObject();
-					 
+				if (filterCalibration) {
+					objectToTrack = new TrackingObject();
+
 					// Threshold the hsv image to filter the picture
 					Core.inRange(hsvImage, slider.getScalarLow(),
 							slider.getScalarHigh(), hsvImage);
@@ -148,42 +155,59 @@ public class Tracking {
 					hsvFilteredPanel.setImageBuffer(toBufferedImage(hsvImage));
 
 				} else {
-					 objectToTrack = new Puck();
-					 
-					// Threshold the hsv image to filter for Pucks
-					Core.inRange(hsvImage, objectToTrack.HSVmin,objectToTrack.HSVmax, hsvImageThresholded);
+					objectToTrack = new Puck();
 
-					// reduce the noise in the image
-					reduceNoise(hsvImageThresholded);
-
-					// Find list of Pucks
-					findObjects(hsvImageThresholded, objectToTrack, objects);
+					// Search the hsvImage for the objectToTrack
+					getObjects(objects, objectToTrack, hsvImage);
 					
-					objectToTrack = new Banana();
-					 
-					// Threshold the hsv image to filter for Pucks
-					Core.inRange(hsvImage, objectToTrack.HSVmin,objectToTrack.HSVmax, hsvImageThresholded);
-
-					// reduce the noise in the image
-					reduceNoise(hsvImageThresholded);
-
-					// Find list of Pucks
-					findObjects(hsvImageThresholded, objectToTrack, objects);
 
 					// Draw circle where the centroid is
 					normalPanel.setObjects(objects);
-					objects.clear();
 
+					if (objects.size() > 10) {
+						objectcount += objects.size();
+						objects.clear();
+					}
+					
+					
 				}
 
 				// Display image
 				normalPanel.setImageBuffer(toBufferedImage(originalImage));
 
 			} else {
+				System.out.println(objectcount+objects.size());
 				System.out.println(" --(!) No captured frame -- Break!");
 				break;
 			}
 		}
+	}
+
+	/**
+	 * Searches the given hsvImage for the objectToTrack and adds it to the list
+	 * of objects
+	 * 
+	 * @param objects
+	 *            - list of TrackingObjects
+	 * @param objectToTrack
+	 *            - The desired object to be tracked
+	 * @param hsvImage
+	 *            - The HSV image
+	 */
+	private static void getObjects(List<TrackingObject> objects,
+			TrackingObject objectToTrack, Mat hsvImage) {
+		Mat hsvImageThresholded = new Mat();
+
+		// Threshold the hsv image to filter for Pucks
+		Core.inRange(hsvImage, objectToTrack.HSVmin, objectToTrack.HSVmax,
+				hsvImageThresholded);
+
+		// reduce the noise in the image
+		reduceNoise(hsvImageThresholded);
+
+		// Find list of Pucks
+		findObjects(hsvImageThresholded, objectToTrack, objects);
+
 	}
 
 	/**
@@ -199,14 +223,13 @@ public class Tracking {
 		// create structuring element that will be used to "dilate" and "erode"
 		// image. the element chosen here is a 3px by 3px rectangle
 		Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT,
-				new Size(3, 3));
+				new Size(1, 1));
 
 		// dilate with larger element so make sure object is nicely visible
 		Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT,
-				new Size(6, 6));
+				new Size(12, 12));
 
 		// Erode will shrink the grouping of pixels
-		Imgproc.erode(image, image, erodeElement);
 		Imgproc.erode(image, image, erodeElement);
 		Imgproc.erode(image, image, erodeElement);
 		Imgproc.erode(image, image, erodeElement);
@@ -247,8 +270,8 @@ public class Tracking {
 	 *            - Image that will be scanned for objects
 	 * @return Position of the centroid
 	 * */
-	public static void findObjects(Mat inputImage,
-			TrackingObject obj, List<TrackingObject> objects) {
+	public static void findObjects(Mat inputImage, TrackingObject obj,
+			List<TrackingObject> objects) {
 
 		// Temp mat, as to not override the input Mat
 		Mat image = new Mat();

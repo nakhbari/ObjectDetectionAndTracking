@@ -8,8 +8,8 @@ public class Puck extends TrackingObject {
 	public Puck() {
 		super();
 		color = Color.GREEN;
-		HSVmin = new Scalar(49, 42, 37);
-		HSVmax= new Scalar(88, 229, 157 );
+		HSVmin = new Scalar(20, 65, 160);
+		HSVmax = new Scalar(45, 208, 196);
 	}
 
 	public Puck(float x, float y) {

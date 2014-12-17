@@ -1,9 +1,27 @@
 Yellow:
-H 0  ,179
-S 70 ,143
-V 131,255
+H 25 , 45
+S 61 ,222
+V 166,199
 
 Green:
 H 49 , 88
 S 42 ,229
 V 37 ,157
+
+erode size 3
+dilate size 4
+
+4xerode
+3xdilate
+objects - 960
+
+2xerode
+2xdilate
+objects - 1023
+
+erode size 1
+dilate size 12
+
+3xerode
+2xdilate
+objects - 1209
