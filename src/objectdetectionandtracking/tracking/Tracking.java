@@ -1,12 +1,13 @@
 package objectdetectionandtracking.tracking;
 
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
+import java.util.Queue;
 
 import javax.swing.JFrame;
 
@@ -44,6 +45,11 @@ public class Tracking {
 	private static final int MIN_OBJECT_AREA = 10 * 10;
 	// Maximum object area is to be a percentage of the frame's area
 	private static final int MAX_OBJECT_AREA = (int) ((VIDEO_FRAME_HEIGHT * VIDEO_FRAME_WIDTH) * 0.67);;
+	private static MouseListener mouseListener;
+	private static Mat hsvImage;
+	private static ImageFilteringPanel slider;
+	private static VideoDisplayPanel normalPanel;
+	private static final int NUM_CHANNELS = 3;
 
 	/**
 	 * Entry point for the program
@@ -54,20 +60,22 @@ public class Tracking {
 		long lastLoopTime = System.nanoTime();
 		long lastFpsTime = 0;
 		long fps = 0;
-		boolean filterCalibration = false;
+		boolean filterCalibration = true;
 		boolean useCameraFeed = true;
 
+		initializeMouseListener();
 		List<TrackingObject> objects = new ArrayList<TrackingObject>();
 		TrackingObject objectToTrack;
 
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
 		// Create the Frame/Window to display video
-		VideoDisplayPanel normalPanel = new VideoDisplayPanel();
+		normalPanel = new VideoDisplayPanel();
 		JFrame normalFrame = new JFrame("Normal");
 		normalFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		normalFrame.setSize(VIDEO_FRAME_WIDTH, VIDEO_FRAME_HEIGHT);
 		normalFrame.add(normalPanel);
+		normalFrame.addMouseListener(mouseListener);
 		normalFrame.setVisible(true);
 
 		// HSV filtered content wil be displayed here
@@ -78,7 +86,7 @@ public class Tracking {
 		HSVFilteredframe.add(hsvFilteredPanel);
 
 		// Create frame to manipulate image level thresholding
-		ImageFilteringPanel slider = new ImageFilteringPanel();
+		slider = new ImageFilteringPanel();
 		JFrame sliderFrame = new JFrame("HSV Thresholds");
 		sliderFrame.setSize(FILTER_FRAME_WIDTH, FILTER_FRAME_HEIGHT);
 		sliderFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -93,6 +101,8 @@ public class Tracking {
 		VideoCapture camera;
 		if (useCameraFeed) {
 			camera = new VideoCapture(0);
+			if (!camera.isOpened())
+				System.out.println("Can't open camera");
 			camera.open(0);
 		} else {
 			camera = new VideoCapture(
@@ -101,7 +111,9 @@ public class Tracking {
 
 		// Matrix that represents the individual images
 		Mat originalImage = new Mat();
-		Mat hsvImage = new Mat();
+		System.out.println("type " + originalImage.type());
+		hsvImage = new Mat();
+		Mat thresholdedImage = new Mat();
 		int objectcount = 0;
 
 		while (true) {
@@ -139,27 +151,27 @@ public class Tracking {
 
 					// Threshold the hsv image to filter the picture
 					Core.inRange(hsvImage, slider.getScalarLow(),
-							slider.getScalarHigh(), hsvImage);
+							slider.getScalarHigh(), thresholdedImage);
 
 					// reduce the noise in the image
-					reduceNoise(hsvImage);
+					reduceNoise(thresholdedImage);
 
 					// Find list of objects
-					findObjects(hsvImage, objectToTrack, objects);
+					findObjects(thresholdedImage, objectToTrack, objects);
 
 					// Draw circle where the centroid is
-					normalPanel.setObjects(objects);
+					// normalPanel.setObjects(objects);
 					hsvFilteredPanel.setObjects(objects);
 					objects.clear();
 
-					hsvFilteredPanel.setImageBuffer(toBufferedImage(hsvImage));
+					hsvFilteredPanel
+							.setImageBuffer(toBufferedImage(thresholdedImage));
 
 				} else {
 					objectToTrack = new Puck();
 
 					// Search the hsvImage for the objectToTrack
-					getObjects(objects, objectToTrack, hsvImage);
-					
+					getObjects(objects, objectToTrack, thresholdedImage);
 
 					// Draw circle where the centroid is
 					normalPanel.setObjects(objects);
@@ -168,15 +180,14 @@ public class Tracking {
 						objectcount += objects.size();
 						objects.clear();
 					}
-					
-					
+
 				}
 
 				// Display image
 				normalPanel.setImageBuffer(toBufferedImage(originalImage));
 
 			} else {
-				System.out.println(objectcount+objects.size());
+				System.out.println(objectcount + objects.size());
 				System.out.println(" --(!) No captured frame -- Break!");
 				break;
 			}
@@ -237,7 +248,7 @@ public class Tracking {
 		// // Dilate will expand the grouping of pixels
 		Imgproc.dilate(image, image, dilateElement);
 		Imgproc.dilate(image, image, dilateElement);
-		Imgproc.dilate(image, image, dilateElement);
+		// Imgproc.dilate(image, image, dilateElement);
 
 	}
 
@@ -332,5 +343,88 @@ public class Tracking {
 			}
 
 		}
+	}
+
+	private static ScalarRange GetColorRangeHSV(Mat image, int x, int y) {
+		if (image.channels() < NUM_CHANNELS)
+			return null;
+
+		int radius = 10;
+		GaussianDistribution<Double> hueDistribution = new GaussianDistribution<>();
+		GaussianDistribution<Double> valueDistribution = new GaussianDistribution<>();
+		GaussianDistribution<Double> saturationDistribution = new GaussianDistribution<>();
+		ScalarRange range = null;
+
+		int initX = (x - radius >= 0) ? (x - radius) : 0;
+		int initY = (y - radius >= 0) ? (y - radius) : 0;
+		int endX = (x + radius <= image.cols()) ? (x + radius) : image.cols();
+		int endY = (y + radius <= image.rows()) ? (y + radius) : image.rows();
+		double[] color;
+
+		for (int i = initX; i < endX; i++) {
+			for (int j = initY; j < endY; j++) {
+				color = image.get(j, i);
+				hueDistribution.addData(color[0]);
+				saturationDistribution.addData(color[1]);
+				valueDistribution.addData(color[2]);
+			}
+		}
+		System.out.println("Hue Mean: " + hueDistribution.getMean() + " Dev: "
+				+ hueDistribution.getDevation());
+		System.out.println("Sat Mean: " + saturationDistribution.getMean()
+				+ " Dev: " + saturationDistribution.getDevation());
+		System.out.println("Val Mean: " + valueDistribution.getMean()
+				+ " Dev: " + valueDistribution.getDevation());
+		range = new ScalarRange(
+				new Scalar(
+						(hueDistribution.getMean() - (0.5 * hueDistribution
+								.getDevation())),
+						(saturationDistribution.getMean() - (2 * saturationDistribution
+								.getDevation())),
+						(valueDistribution.getMean() - (2 * valueDistribution
+								.getDevation()))),
+				new Scalar(
+						(hueDistribution.getMean() + (0.5 * hueDistribution
+								.getDevation())),
+						(saturationDistribution.getMean() + (2 * saturationDistribution
+								.getDevation())),
+						(valueDistribution.getMean() + (2 * valueDistribution
+								.getDevation()))));
+		return range;
+	}
+
+	public static void initializeMouseListener() {
+		mouseListener = new MouseListener() {
+
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				slider.setSliders(GetColorRangeHSV(hsvImage, e.getX(), e.getY()));
+				normalPanel.addObject(new TrackingObject(e.getX(), e.getY()));
+			}
+
+			@Override
+			public void mousePressed(MouseEvent e) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void mouseReleased(MouseEvent e) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e) {
+				// TODO Auto-generated method stub
+
+			}
+		};
 	}
 }

@@ -6,6 +6,8 @@ import javax.swing.JSlider;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
+import objectdetectionandtracking.tracking.ScalarRange;
+
 import org.opencv.core.Scalar;
 
 /**
@@ -107,6 +109,15 @@ public class ImageFilteringPanel extends JPanel {
 	public Scalar getScalarLow() {
 		return new Scalar(low[0].getValue(), low[1].getValue(),
 				low[2].getValue());
+	}
+
+	public void setSliders(ScalarRange range) {
+		Scalar min = range.getMin();
+		Scalar max = range.getMax();
+		for (int i = 0; i < 3; i++) {
+			low[i].setValue((int) min.val[i]);
+			high[i].setValue((int) max.val[i]);
+		}
 	}
 
 	/**
